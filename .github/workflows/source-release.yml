@@ -1,0 +1,84 @@
+name: Verified generic tool source release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verified-generic-tool-release-main
+  cancel-in-progress: false
+
+jobs:
+  generic-policy-check:
+    name: generic-source-release-check
+    if: github.repository == 'vine53/vine-governance-policy' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: 取出手動觸發的精確 main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 驗證通用 library
+        run: |
+          set -euo pipefail
+          test -f scripts/governance/lib/premerge_github_attestation.py
+          test -f .claude/workflows/tests/test_premerge_github_attestation.py
+          python3 -m unittest discover -s .claude/workflows/tests -p test_premerge_github_attestation.py
+  verified-tool-release:
+    name: verified-tool-release
+    needs: generic-policy-check
+    if: github.repository == 'vine53/vine-governance-policy' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: 取出已通過檢查的精確 main commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 只封裝已批准的通用 source 與公開 metadata
+        env:
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_RUN_ID: ${{ github.run_id }}
+          RELEASE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test -f scripts/governance/lib/premerge_github_attestation.py
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          metadata = {
+              "release_kind": "VERIFIED_TOOL_RELEASE",
+              "source_repository": "vine53/vine-governance-policy",
+              "source_commit": os.environ["RELEASE_SOURCE_SHA"],
+              "run_id": os.environ["RELEASE_RUN_ID"],
+              "run_attempt": os.environ["RELEASE_RUN_ATTEMPT"],
+              "complete_policy": False,
+              "admission": False,
+              "review_go": False,
+          }
+          Path("RELEASE_METADATA.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          python3 -m zipfile -c generic-tool-release.zip scripts/governance/lib/premerge_github_attestation.py README.md RELEASE_METADATA.json
+      - name: 產生標準 GitHub build provenance attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: generic-tool-release.zip
+      - name: 上傳通用工具 release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-generic-tool-release-${{ github.sha }}
+          path: generic-tool-release.zip
+          if-no-files-found: error
+          retention-days: 30
