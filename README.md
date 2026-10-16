@@ -17,3 +17,11 @@
 這個 artifact 只能稱為 **VERIFIED_TOOL_RELEASE**。它不代表完整 policy、application admission、review GO、gland 准入或 private 應用 branch required check 已成立。標準 attestation 只證明工具 release 的 provenance；FR-GH-075 的完整 scope、逐軸 GO、期限、撤銷、獨立 verifier 與 application exact required check 仍須分別驗收。
 
 此草稿本身不修改 repository、發布 source 或觸發 workflow。既有空 repo 的 Actions allowlist 與 SHA pinning 已另有讀回回執；此 bundle 不重複設定。完成 library／privacy／workflow syntax 審查並記錄最終五檔雜湊後，才可交由 root 明確授予的 freeze 包沿上述 API／PR 流程發布。
+
+## 執行測試
+
+測試需要 Python 3 與 GitHub CLI（`gh`）；CLI parser 回歸測試在本機驗證參數契約，不發出網路請求。
+
+```sh
+python3 -m unittest discover -s .claude/workflows/tests -p test_premerge_github_attestation.py
+```

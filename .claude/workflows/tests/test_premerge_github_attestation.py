@@ -2,13 +2,14 @@
 """Purpose: 以隔離合成資料驗證 GH admission 契約，無網路／provider。
 
 Existing capability checked: unittest、generic GH attestation library；只用 function DI。
-Owner: governance；Runtime: Python 3.10+ stdlib。
+Owner: governance；Runtime: Python 3.10+ stdlib、GitHub CLI（離線 argv parser 檢查）。
 """
 import copy
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -91,11 +92,30 @@ class AdmissionContract(unittest.TestCase):
         self.assertEqual(result["status"], "VERIFIED_ADMISSION_EVIDENCE", result)
         self.assertFalse(result["gate_authorized"])
         argv = self.calls[0][0]
-        for flag, value in {"--repo": lib.REPOSITORY, "--signer-workflow": self.enrollment["signer_workflow"],
+        for flag, value in {"--repo": lib.REPOSITORY,
                 "--signer-digest": "a" * 40, "--source-digest": "b" * 40,
                 "--cert-identity": self.enrollment["cert_identity"], "--cert-oidc-issuer": lib.ISSUER}.items():
             self.assertEqual(argv[argv.index(flag) + 1], value)
         self.assertIn("--deny-self-hosted-runners", argv)
+        self.assertNotIn("--signer-workflow", argv, "exact certificate identity 已固定 workflow；GH CLI 禁止同傳兩者")
+
+    def test_real_gh_parser_accepts_identity_flags_before_bundle_validation(self):
+        gh = shutil.which("gh")
+        self.assertIsNotNone(gh, "本契約測試需要真 GitHub CLI；缺少時不能略過並宣稱通過")
+        def real_parser(argv, env, timeout, output_limit):
+            actual = [str(Path(gh).resolve()), *argv[1:]]
+            # 明確無效副檔名會在讀 bundle／網路驗證之前停止；先通過真 CLI 互斥旗標檢查。
+            invalid = Path(actual[actual.index("--bundle") + 1]).with_suffix(".invalid")
+            invalid.write_bytes(b"{}")
+            actual[actual.index("--bundle") + 1] = str(invalid)
+            code, output = lib.execute_gh(actual, env, timeout, output_limit)
+            self.assertNotEqual(code, 0)
+            self.assertIn(b"bundle file extension not supported", output,
+                          "必須到達 bundle 驗證，不能停在互斥旗標或其他 CLI 啟動錯誤")
+            return code, output
+        result = self.verify(real_parser)
+        self.blocked(result)
+        self.assertEqual(result["reason"], "gh_verification_failed")
 
     def test_policy_release_never_becomes_review_go(self):
         self.request["purpose"] = "policy_release"
