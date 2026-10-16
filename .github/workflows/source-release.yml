@@ -57,6 +57,7 @@ jobs:
           python3 - <<'PY'
           import json
           import os
+          import zipfile
           from pathlib import Path
           metadata = {
               "release_kind": "VERIFIED_TOOL_RELEASE",
@@ -69,8 +70,10 @@ jobs:
               "review_go": False,
           }
           Path("RELEASE_METADATA.json").write_text(json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8")
+          with zipfile.ZipFile("generic-tool-release.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:
+              for relative_path in ("scripts/governance/lib/premerge_github_attestation.py", "README.md", "RELEASE_METADATA.json"):
+                  archive.write(relative_path, arcname=relative_path)
           PY
-          python3 -m zipfile -c generic-tool-release.zip scripts/governance/lib/premerge_github_attestation.py README.md RELEASE_METADATA.json
       - name: 產生標準 GitHub build provenance attestation
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
