@@ -296,7 +296,7 @@ def verify_admission(*, host_context, artifact_path, bundle_path, purpose, now=N
                 path.write_bytes(data)
                 path.chmod(0o400)
             argv = [str(gh), "attestation", "verify", str(artifact_copy), "--bundle", str(bundle_copy),
-                    "--repo", REPOSITORY, "--signer-workflow", enrollment["signer_workflow"],
+                    "--repo", REPOSITORY,
                     "--signer-digest", enrollment["workflow_sha"], "--source-digest", enrollment["source_sha"],
                     "--cert-identity", enrollment["cert_identity"], "--cert-oidc-issuer", ISSUER,
                     "--deny-self-hosted-runners", "--predicate-type", "https://slsa.dev/provenance/v1",
