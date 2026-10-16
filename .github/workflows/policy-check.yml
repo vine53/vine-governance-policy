@@ -1,0 +1,28 @@
+name: Generic policy check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generic-policy-check:
+    name: generic-policy-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 取出本控制面 repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: 驗證通用純函式與負向案例
+        run: |
+          set -euo pipefail
+          test -f scripts/governance/lib/premerge_github_attestation.py
+          test -f .claude/workflows/tests/test_premerge_github_attestation.py
+          python3 -m unittest discover -s .claude/workflows/tests -p test_premerge_github_attestation.py
